@@ -1,5 +1,17 @@
 // Tonokip RepRap firmware rewrite based off of Hydra-mmm firmware.
+// with MrAlvin's extensions
 // Licence: GPL
+
+#define MOTHERBOARD 14 // See "pins.h" for details
+                       // ATMEGA168 = 0, SANGUINO = 1, MOTHERBOARD = 2, MEGA = 3, ATMEGA328 = 4, MEGA(MrAlvin) = 14, Mega (Rapatan) = 15
+
+#define FIRMWARE_VERSION "Tonokip 2010.10.05 MA v1.00.0004"
+/* Notes about this version:
+    Single pin control for Extruder heater (HEATER_0_PIN, TEMP_0_PIN) has been implemented
+    Single pin control for Heated bed (HEATER_2_PIN, TEMP_2_PIN) has been implemented
+    Physical Kill Pin has been implemented
+    Serial1 ("serial one", pins: 19 (RX) and 18 (TX)) is used as a debug port. Connect any terminal program to monitor debug information. 
+*/
 
 #include "configuration.h"
 #include "pins.h"
@@ -18,9 +30,15 @@
 // G92 - Set current position to cordinates given
 
 //RepRap M Codes
+// M0   - Stop -  Finishes any moves left in command buffer, then shut down (command buffer not implemented yet)
 // M104 - Set target temp
 // M105 - Read current temp
+// M106 - Fan On (Sxx sets the voltage on the fan)
+// M107 - Fan off
 // M109 - Wait for current temp to reach target temp.
+// M112 - Emergency Stop -  terminate immediately, turned off motors and heaters, and shut down NOW! 
+// M115 - Get Firmware Version
+// M140 - Bed Temperature (Fast) = Set target Temperature (do not wait for it to be reached)
 
 //Custom M Codes
 // M80  - Turn on Power Supply
@@ -31,6 +49,8 @@
 // M85  - Set inactivity shutdown timer with parameter S<seconds>. To disable set zero (default)
 // M86  - If Endstop is Not Activated then Abort Print. Specify X and/or Y
 // M92  - Set axis_steps_per_unit - same syntax as G92
+// M201 - turn light on - (Sxxx sets the Light PWM. Values are 0-255)
+// M202 - turn light off
 
 //Stepper Movement Variables
 bool direction_x, direction_y, direction_z, direction_e;
@@ -54,12 +74,16 @@ boolean comment_mode = false;
 char *strchr_pointer; // just a pointer to find chars in the cmd string like X, Y, Z, E, etc
 
 //manage heater variables
-int target_raw = 0;
-int current_raw;
+int heater_target_raw = 0;
+int heater_current_raw;
+
+int bed_target_raw = 0;
+int bed_current_raw;
 
 //Inactivity shutdown variables
 unsigned long previous_millis_cmd=0;
 unsigned long max_inactive_time = 0;
+
 
 void setup()
 { 
@@ -88,9 +112,32 @@ void setup()
   if(E_ENABLE_PIN > -1) pinMode(E_ENABLE_PIN,OUTPUT);
 
   if(HEATER_0_PIN > -1) pinMode(HEATER_0_PIN,OUTPUT);
+  if(HEATER_1_PIN > -1) pinMode(HEATER_1_PIN,OUTPUT);
+  if(HEATER_2_PIN > -1) pinMode(HEATER_2_PIN,OUTPUT);
+  if(HEATER_3_PIN > -1) pinMode(HEATER_3_PIN,OUTPUT);
+  
+  //Initialize Control Pins
+  if(FAN_PIN_0 > -1) pinMode(FAN_PIN_0,OUTPUT);  
+  if(FAN_PIN_1 > -1) pinMode(FAN_PIN_1,OUTPUT); 
+  if(KILL_PIN > -1) { pinMode(KILL_PIN,INPUT);  digitalWrite(KILL_PIN, HIGH); }       // turn on internal 20k pull-up resistor
+  if(LIGHT_PIN_0 > -1) pinMode(LIGHT_PIN_0,OUTPUT);  
+  if(LIGHT_PIN_1 > -1) pinMode(LIGHT_PIN_1,OUTPUT);  
+  
+  //MicroStep pins default to disabled (no micro stepping).
+  if(MS1_PIN > -1) digitalWrite(MS1_PIN,LOW);
+  if(MS2_PIN > -1) digitalWrite(MS2_PIN,LOW);
+  if(MS3_PIN > -1) digitalWrite(MS3_PIN,LOW);
+  
+  //Initialize MicroStep pins
+  if(MS1_PIN > -1) pinMode(MS1_PIN,OUTPUT);
+  if(MS2_PIN > -1) pinMode(MS2_PIN,OUTPUT);
+  if(MS3_PIN > -1) pinMode(MS3_PIN,OUTPUT);
   
   Serial.begin(BAUDRATE);
   Serial.println("start");
+  
+  Serial1.begin(115200);
+  Serial1.println("debug start");
 }
 
 
@@ -98,8 +145,17 @@ void loop()
 {
   get_command();
   manage_heater();
-  
+  updateLCD();
   manage_inactivity(1); //shutdown if not receiving any new commands
+  manage_kill_pin();
+}
+
+void updateLCD() 
+{
+}
+
+inline void manage_kill_pin()
+{
 }
 
 inline void get_command() 
@@ -280,26 +336,52 @@ inline void process_commands()
     
     switch( (int)code_value() ) 
     {
-      case 104: // M104
-        if (code_seen('S')) target_raw = temp2analog(code_value());
+      case 0: // M0 - Stop
+        kill(6);
         break;
-      case 105: // M105
+      case 104: // M104 - Set target temp
+        if (code_seen('S')) heater_target_raw = temp2analog(code_value(), THERMISTOR_ON_0);
+        break;
+      case 105: // M105 - Read target temp
         Serial.print("T:");
-        Serial.println( analog2temp(analogRead(TEMP_0_PIN)) ); 
+        Serial.print( analog2temp(analogRead(TEMP_0_PIN), THERMISTOR_ON_0) );  // Extruder temp
+        Serial.print(" - ");
+        Serial.println(analog2temp(analogRead(TEMP_2_PIN), THERMISTOR_ON_2) );  //Heated bed Temp
         if(!code_seen('N')) return;  // If M105 is sent from generated gcode, then it needs a response.
         break;
+      case 106: // M106 - Fan On (Sxx sets the voltage on the fan)
+         if(FAN_PIN_0 > -1) if (code_seen('S')) analogWrite(FAN_PIN_0, ((code_value()/12.0)*254 ));
+        break;
+      case 107: // M107 - Fan off
+        if(FAN_PIN_0 > -1) analogWrite(FAN_PIN_0, 0);
+        break;
       case 109: // M109 - Wait for heater to reach target.
-        if (code_seen('S')) target_raw = temp2analog(code_value());
+        if (code_seen('S')) heater_target_raw = temp2analog(code_value(), THERMISTOR_ON_0);
         previous_millis_heater = millis(); 
-        while(current_raw < target_raw) {
+        while(heater_current_raw < heater_target_raw) {
           if( (millis()-previous_millis_heater) > 1000 ) //Print Temp Reading every 1 second while heating up.
           {
             Serial.print("T:");
-            Serial.println( analog2temp(analogRead(TEMP_0_PIN)) ); 
+            Serial.println( analog2temp(analogRead(TEMP_0_PIN), THERMISTOR_ON_0)); 
             previous_millis_heater = millis(); 
           }
           manage_heater();
         }
+        break;
+      case 112:
+        kill(5);
+        break;
+      case 115: // M115 - Get Firmware Version
+        Serial.print("Firmware Version: "); Serial.println(FIRMWARE_VERSION);
+        Serial.print("x_steps_per_unit: "); Serial.println(x_steps_per_unit);
+        Serial.print("y_steps_per_unit: "); Serial.println(y_steps_per_unit);
+        Serial.print("z_steps_per_unit: "); Serial.println(z_steps_per_unit);
+        Serial.print("e_steps_per_unit: "); Serial.println(e_steps_per_unit);
+        Serial.print("max_feedrate: "); Serial.println(max_feedrate);
+        Serial.println();
+        break;
+      case 140: // M140 - Bed Temperature (Fast)
+        if (code_seen('S')) bed_target_raw = temp2analog(code_value(), THERMISTOR_ON_2);
         break;
       case 80: // M81 - ATX Power On
         if(PS_ON_PIN > -1) pinMode(PS_ON_PIN,OUTPUT); //GND
@@ -307,19 +389,19 @@ inline void process_commands()
       case 81: // M81 - ATX Power Off
         if(PS_ON_PIN > -1) pinMode(PS_ON_PIN,INPUT); //Floating
         break;
-      case 82:
+      case 82: // M82  - Set E codes absolute (default)
         relative_mode_e = false;
         break;
-      case 83:
+      case 83:// M83  - Set E codes relative while in Absolute Coordinates (G90) mode
         relative_mode_e = true;
         break;
-      case 84:
+      case 84: // M84  - Disable steppers until next move
         disable_x();
         disable_y();
         disable_z();
         disable_e();
         break;
-      case 85: // M85
+      case 85: // M85  - Set inactivity shutdown timer with parameter S<seconds>. To disable set zero (default)
         code_seen('S');
         max_inactive_time = code_value()*1000; 
         break;
@@ -327,11 +409,17 @@ inline void process_commands()
         if(code_seen('X')) if( digitalRead(X_MIN_PIN) == ENDSTOPS_INVERTING ) kill(3);
         if(code_seen('Y')) if( digitalRead(Y_MIN_PIN) == ENDSTOPS_INVERTING ) kill(4);
         break;
-      case 92: // M92
+      case 92: // M92  - Set axis_steps_per_unit - same syntax as G92
         if(code_seen('X')) x_steps_per_unit = code_value();
         if(code_seen('Y')) y_steps_per_unit = code_value();
         if(code_seen('Z')) z_steps_per_unit = code_value();
         if(code_seen('E')) e_steps_per_unit = code_value();
+        break;
+      case 201: // M201 - Light On (Sxxx sets the Light PWM. Values are 0-255)
+        if(LIGHT_PIN_0 > -1) if (code_seen('S')) analogWrite(LIGHT_PIN_0, (code_value()));
+        break;
+      case 202: // M2002 - Light off
+        if(LIGHT_PIN_0 > -1) analogWrite(LIGHT_PIN_0, 0);
         break;
     }
     
@@ -506,20 +594,31 @@ inline void  enable_y() { if(Y_ENABLE_PIN > -1) digitalWrite(Y_ENABLE_PIN, Y_ENA
 inline void  enable_z() { if(Z_ENABLE_PIN > -1) digitalWrite(Z_ENABLE_PIN, Z_ENABLE_ON); }
 inline void  enable_e() { if(E_ENABLE_PIN > -1) digitalWrite(E_ENABLE_PIN, E_ENABLE_ON); }
 
-inline void manage_heater()
-{
-  current_raw = analogRead(TEMP_0_PIN);                  // If using thermistor, when the heater is colder than targer temp, we get a higher analog reading than target, 
-  if(USE_THERMISTOR) current_raw = 1023 - current_raw;   // this switches it up so that the reading appears lower than target for the control logic.
+
+inline void manage_heater(){
+  //Extruder
+  heater_current_raw = analogRead(TEMP_0_PIN);                         // If using thermistor, when the heater is colder than targer temp, we get a higher analog reading than target, 
+  if(THERMISTOR_ON_0) heater_current_raw = 1023 - heater_current_raw;   // this switches it up so that the reading appears lower than target for the control logic.
   
-  if(current_raw >= target_raw) digitalWrite(HEATER_0_PIN,LOW);
+  if(heater_current_raw >= heater_target_raw) digitalWrite(HEATER_0_PIN,LOW);
   else digitalWrite(HEATER_0_PIN,HIGH);
+
+  //Heated bed 
+  if (MANAGE_HEATED_BED){
+      bed_current_raw = analogRead(TEMP_2_PIN);                         // If using thermistor, when the heater is colder than targer temp, we get a higher analog reading than target, 
+      if(THERMISTOR_ON_2) bed_current_raw = 1023 - bed_current_raw;      // this switches it up so that the reading appears lower than target for the control logic.
+        
+      if(bed_current_raw >= bed_target_raw) digitalWrite(HEATER_2_PIN,LOW);
+      else digitalWrite(HEATER_2_PIN,HIGH);
+  }
+  manage_kill_pin();
 }
 
 // Takes temperature value as input and returns corresponding analog value from RepRap thermistor temp table.
 // This is needed because PID in hydra firmware hovers around a given analog value, not a temp value.
 // This function is derived from inversing the logic from a portion of getTemperature() in FiveD RepRap firmware.
-float temp2analog(int celsius) {
-  if(USE_THERMISTOR) {
+float temp2analog(int celsius, boolean use_thermistor) {
+  if(use_thermistor) {
     int raw = 0;
     byte i;
     
@@ -546,8 +645,8 @@ float temp2analog(int celsius) {
 }
 
 // Derived from RepRap FiveD extruder::getTemperature()
-float analog2temp(int raw) {
-  if(USE_THERMISTOR) {
+float analog2temp(int raw, boolean use_thermistor) {
+  if(use_thermistor) {
     int celsius = 0;
     byte i;
 
@@ -574,9 +673,13 @@ float analog2temp(int raw) {
   }
 }
 
+
 inline void kill(byte debug)
 {
   if(HEATER_0_PIN > -1) digitalWrite(HEATER_0_PIN,LOW);
+  if(HEATER_1_PIN > -1) digitalWrite(HEATER_1_PIN,LOW);
+  if(HEATER_2_PIN > -1) digitalWrite(HEATER_2_PIN,LOW);
+  if(HEATER_3_PIN > -1) digitalWrite(HEATER_3_PIN,LOW);
   
   disable_x;
   disable_y;
@@ -593,6 +696,9 @@ inline void kill(byte debug)
       case 2: Serial.print("Linear Move Abort, Last Line: "); break;
       case 3: Serial.print("Homing X Min Stop Fail, Last Line: "); break;
       case 4: Serial.print("Homing Y Min Stop Fail, Last Line: "); break;
+      case 5: Serial.print("User Selected Emergency Shutdown, Last Line: "); break;
+      case 6: Serial.print("User Selected Stop and Shutdown, Last Line: "); break;
+      case 7: Serial.print("Kill_pin Stop and Shutdown, Last Line: "); break;
     } 
     Serial.println(gcode_LastN);
     delay(5000); // 5 Second delay
