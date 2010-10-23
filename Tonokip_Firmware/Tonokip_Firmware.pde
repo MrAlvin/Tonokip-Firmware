@@ -2,12 +2,18 @@
 // with MrAlvin's extensions
 // Licence: GPL
 
-#define MOTHERBOARD 4 // See "pins.h" for details  (will not compile on ATmega168 - code base is too big)
+#define MOTHERBOARD 15 // See "pins.h" for details  (will not compile on ATmega168 - code base is too big)
                        // ATMEGA168 = 0, SANGUINO = 1, RepRap Gen3 MOTHERBOARD = 2, MEGA = 3, ATMEGA328 = 4, MEGA(MrAlvin) = 14, MEGA(Rapatan) = 15
 
-#define FIRMWARE_VERSION "Tonokip 2010.10.12 MA v1.00.0005"
+#define FIRMWARE_VERSION "Tonokip 2010.10.20 MA v1.00.0006"
 /* Notes about this version:
+  106:
+    Single pin control for Extruder heater (HEATER_1_PIN, TEMP_1_PIN) has been implemented,    
+    with some supervising management from Heater0, so both heater wires will always be off when the extruder tip is hot enough -- untested
+    
+  105:
     Single pin control for Extruder heater (HEATER_0_PIN, TEMP_0_PIN) has been implemented
+
     Single pin control for Heated bed (HEATER_2_PIN, TEMP_2_PIN) has been implemented
     Physical Kill Pin has been implemented   -- untested
 */
@@ -38,7 +44,7 @@
 // M107 - Fan off   -- untested
 // M109 - Wait for current temp to reach target temp.
 // M112 - Emergency Stop -  terminate immediately, turned off motors and heaters, and shut down NOW!    -- untested
-// M115 - Get Firmware Version  -- untested
+// M115 - Get Firmware Version
 // M140 - Bed Temperature (Fast) = Set target Temperature (do not wait for it to be reached)
 
 //Custom M Codes
@@ -54,8 +60,9 @@
 // M92  - Set axis_steps_per_unit (also called Calibration variables)- same syntax as G92.  Use M115  to read Calibration variables
 // M201 - turn light on - (Sxxx sets the Light PWM. Values are 0-255)  -- untested
 // M202 - turn light off  -- untested
-// M312 - Save Calibration variables to EEPROM  -- untested
-// M313 - Load Calibration variables from EEPROM  -- untested
+// M204 - Set target temp (heater 2)  -- untested
+// M312 - Save Calibration variables to EEPROM
+// M313 - Load Calibration variables from EEPROM
 
 
 //GCodes that wants to be implemented
@@ -65,7 +72,7 @@
 //Functions that wants to be improved
 // MoveBuffer - will improve printing of small objects, and possibly more
 // PID & PWM temperature control - will greatly improve control of thickness of extruded thread (should be operated within +/- 1*C)
-// Propper calibration test bed for making a much more precise NTC table.
+// Propper calibration test bed for making a much more precise NTC table. DONE 2010.10.18
 // Feedback on steppers - no more missed steps!! May also improve printable speeds
 
 //Functions that could be improved/made
@@ -80,6 +87,11 @@
 // FIRMWARE OPTIONS  
 boolean debugging = false; // use this to control parts of serial.print statements
 int eepromAddr = 0; // this is the byte where the EEPROM functions will start writing
+
+//RAM info
+extern unsigned int __bss_end;
+extern unsigned int __heap_start;
+extern void *__brkval;
 
 // Stepper Movement Variables
 bool direction_x, direction_y, direction_z, direction_e;
@@ -103,8 +115,12 @@ boolean comment_mode = false;
 char *strchr_pointer;   // just a pointer to find chars in the cmd string like X, Y, Z, E, etc
 
 //manage heater variables
-int heater_target_raw = 0;
-int heater_current_raw;
+int heater0_target_raw = 0;
+int heater0_current_raw;
+
+int heater1_target_raw = 0;
+int heater1_current_raw;
+int heater1_last_raw = 0;      //remember last "on" value. 
 
 int bed_target_raw = 0;
 int bed_current_raw;
@@ -166,6 +182,10 @@ void setup() {
   
   Serial.begin(HOST_BAUDRATE);
   Serial.println("start");
+
+  Load_Calibration_eeprom();
+  Print_calibration_settings();
+  Serial.println("");
   
 }
 
@@ -222,6 +242,7 @@ inline bool code_seen(char code)  {
 
 inline void process_commands()  {
   unsigned long codenum; //throw away variable
+  float code_v; //throw away variable
   
   if(code_seen('N'))  {
     gcode_N = code_value_long();
@@ -359,11 +380,22 @@ inline void process_commands()  {
         debugging = false;
         break;
       case 104: // M104 - Set target temp
-        if (code_seen('S')) heater_target_raw = temp2analog(code_value(), THERMISTOR_ON_0);
+        if (code_seen('S')) {
+          code_v = code_value();
+          heater0_target_raw = temp2analog(code_v, THERMISTOR_ON_0);
+          //also manage heater1
+          if (code_v == 0) heater1_target_raw = 0;  //heater0 is being turned off, also turn heater1 off
+          else { // also turn heater1 on
+            if (code_v < heater1_last_raw)  heater1_target_raw = code_v; //dont set heater1 higher than heater0
+            else heater1_target_raw = heater1_last_raw;
+          }  
+        }
         break;
       case 105: // M105 - Read target temp
         Serial.print("T:");
-        Serial.print( analog2temp(analogRead(TEMP_0_PIN), THERMISTOR_ON_0) );  // Extruder temp
+        Serial.print( analog2temp(analogRead(TEMP_0_PIN), THERMISTOR_ON_0) );  // Extruder temp0
+        Serial.print(" - ");
+        Serial.print( analog2temp(analogRead(TEMP_1_PIN), THERMISTOR_ON_1) );  // Extruder temp1
         Serial.print(" - ");
         Serial.println(analog2temp(analogRead(TEMP_2_PIN), THERMISTOR_ON_2) );  //Heated bed Temp
         if(!code_seen('N')) return;  // If M105 is sent from generated gcode, then it needs a response.
@@ -375,12 +407,20 @@ inline void process_commands()  {
         if(FAN_PIN_0 > -1) analogWrite(FAN_PIN_0, 0);
         break;
       case 109: // M109 - Wait for heater to reach target.
-        if (code_seen('S')) heater_target_raw = temp2analog(code_value(), THERMISTOR_ON_0);
+        if (code_seen('S')) {
+          code_v = code_value();
+          heater0_target_raw = temp2analog(code_v, THERMISTOR_ON_0);
+          heater1_target_raw = temp2analog(code_v, THERMISTOR_ON_1);
+        }
         previous_millis_heater = millis(); 
-        while(heater_current_raw < heater_target_raw) {
+        while(heater0_current_raw < heater0_target_raw) {
           if( (millis()-previous_millis_heater) > 1000 ) {  //Print Temp Reading every 1 second while heating up.
             Serial.print("T:");
-            Serial.println( analog2temp(analogRead(TEMP_0_PIN), THERMISTOR_ON_0)); 
+            Serial.println( analog2temp(analogRead(TEMP_0_PIN), THERMISTOR_ON_0)); // Extruder temp0
+            Serial.print(" - ");
+            Serial.print( analog2temp(analogRead(TEMP_1_PIN), THERMISTOR_ON_1) );  // Extruder temp1
+            Serial.print(" - ");
+            Serial.println(analog2temp(analogRead(TEMP_2_PIN), THERMISTOR_ON_2) );  //Heated bed Temp
             previous_millis_heater = millis(); 
           }
           manage_heater();
@@ -389,14 +429,12 @@ inline void process_commands()  {
       case 112:
         kill(5);
         break;
-      case 115: // M115 - Get Firmware Version
+      case 116: // M116 - Get Firmware Version - operator useable
         Serial.print("Firmware Version: "); Serial.println(FIRMWARE_VERSION);
-        Serial.print("x_steps_per_unit: "); Serial.println(x_steps_per_unit);
-        Serial.print("y_steps_per_unit: "); Serial.println(y_steps_per_unit);
-        Serial.print("z_steps_per_unit: "); Serial.println(z_steps_per_unit);
-        Serial.print("e_steps_per_unit: "); Serial.println(e_steps_per_unit);
-        Serial.print("max_feedrate: "); Serial.println(max_feedrate);
+        print_calibration_settings(); 
         Serial.println();
+      case 115: // M115 - Get Firmware Version - machine readable
+        Serial.print("FIRMWARE_NAME:MMM-MrAlvin FIRMWARE_URL:http%3A//github.com/MrAlvin/ PROTOCOL_VERSION:1.0 MACHINE_TYPE:Mendel EXTRUDER_COUNT:1 HEATER_COUNT:4 \n"
         break;
       case 140: // M140 - Bed Temperature (Fast)
         if (code_seen('S')) bed_target_raw = temp2analog(code_value(), THERMISTOR_ON_2);
@@ -436,6 +474,12 @@ inline void process_commands()  {
       case 201: // M201 - Light On (Sxxx sets the Light PWM. Values are 0-255)
         if(LIGHT_PIN_0 > -1) if (code_seen('S')) analogWrite(LIGHT_PIN_0, (code_value()));
         break;
+      case 204: // M204 - Set target temp1
+        if (code_seen('S')) {
+          heater1_target_raw = temp2analog(code_value(), THERMISTOR_ON_1);
+          heater1_last_raw = heater1_target_raw;
+        }
+        break; 
       case 202: // M202 - Light off
         if(LIGHT_PIN_0 > -1) analogWrite(LIGHT_PIN_0, 0);
         break;
@@ -445,6 +489,13 @@ inline void process_commands()  {
       case 313: // M313 - Load Calibration variables from EEPROM
         Load_Calibration_eeprom();
         break;
+      case 910:
+        Serial.print("Free RAM=");
+        Serial.println(freeMemory());
+        Serial.println("Read more at: http://www.arduino.cc/playground/Code/AvailableMemory");
+        break;
+      default:
+        Serial.println("Unknown GCode");
     }
   }
   ClearToSend();
@@ -609,24 +660,46 @@ inline void  enable_e() { if(E_ENABLE_PIN > -1) digitalWrite(E_ENABLE_PIN, E_ENA
 
 
 inline void manage_heater(){
+  boolean heat_0_off = false;
+  
   if( (millis()-previous_millis_heat) >  wait_heat_time )    {              //we only need to check the heater 10 times a second  
 
       previous_millis_heat = millis();
       
-      //Extruder
-      heater_current_raw = analogRead(TEMP_0_PIN);                          // If using thermistor, when the heater is colder than targer temp, we get a higher analog reading than target, 
-      if(THERMISTOR_ON_0) heater_current_raw = 1023 - heater_current_raw;   // this switches it up so that the reading appears lower than target for the control logic.
+      //Extruder - temp0
+      if (TEMP_0_PIN > -1) {
+        heater0_current_raw = analogRead(TEMP_0_PIN);                          // If using thermistor, when the heater is colder than targer temp, we get a higher analog reading than target, 
+        if(THERMISTOR_ON_0) heater0_current_raw = 1023 - heater0_current_raw;   // this switches it up so that the reading appears lower than target for the control logic.
       
-      if(heater_current_raw >= heater_target_raw) digitalWrite(HEATER_0_PIN,LOW);
-      else digitalWrite(HEATER_0_PIN,HIGH);
+        if (HEATER_0_PIN > -1) {
+          if(heater0_current_raw >= heater0_target_raw) {
+            digitalWrite(HEATER_0_PIN,LOW);
+            heat_0_off = true;
+          }
+          else digitalWrite(HEATER_0_PIN,HIGH);
+        }
+      
+        //Extruder - temp1
+        if (TEMP_1_PIN > -1) {
+          heater1_current_raw = analogRead(TEMP_1_PIN);                          // If using thermistor, when the heater is colder than targer temp, we get a higher analog reading than target, 
+          if(THERMISTOR_ON_1) heater1_current_raw = 1023 - heater1_current_raw;   // this switches it up so that the reading appears lower than target for the control logic.
+            
+          if (HEATER_1_PIN > -1) {
+            if((heater1_current_raw >= heater1_target_raw) || heat_0_off ) digitalWrite(HEATER_1_PIN,LOW); //turn off
+            else digitalWrite(HEATER_1_PIN,HIGH); //turn on
+          }
+        }
+      }
     
       //Heated bed 
-      if (MANAGE_HEATED_BED){
-          bed_current_raw = analogRead(TEMP_2_PIN);                          // If using thermistor, when the heater is colder than targer temp, we get a higher analog reading than target, 
-          if(THERMISTOR_ON_2) bed_current_raw = 1023 - bed_current_raw;      // this switches it up so that the reading appears lower than target for the control logic.
-            
-          if(bed_current_raw >= bed_target_raw) digitalWrite(HEATER_2_PIN,LOW);
-          else digitalWrite(HEATER_2_PIN,HIGH);
+      if (TEMP_2_PIN > -1) {
+           bed_current_raw = analogRead(TEMP_2_PIN);                          // If using thermistor, when the heater is colder than targer temp, we get a higher analog reading than target, 
+           if(THERMISTOR_ON_2) bed_current_raw = 1023 - bed_current_raw;      // this switches it up so that the reading appears lower than target for the control logic.
+          
+           if (HEATER_2_PIN > -1) {
+              if(bed_current_raw >= bed_target_raw) digitalWrite(HEATER_2_PIN,LOW);
+              else digitalWrite(HEATER_2_PIN,HIGH);
+           }
       }
   }
   manage_kill_pin();
@@ -755,3 +828,24 @@ inline void kill(byte debug) {
 }
 
 inline void manage_inactivity(byte debug) { if( (millis()-previous_millis_cmd) >  max_inactive_time ) if(max_inactive_time) kill(debug); }
+
+
+int freeMemory() {
+  int free_memory;
+
+  if((int)__brkval == 0)
+     free_memory = ((int)&free_memory) - ((int)&__bss_end);
+  else
+    free_memory = ((int)&free_memory) - ((int)__brkval);
+
+  return free_memory;
+}
+
+
+void print_calibration_settings() {
+   Serial.print("x_steps_per_unit: "); Serial.println(x_steps_per_unit);
+   Serial.print("y_steps_per_unit: "); Serial.println(y_steps_per_unit);
+   Serial.print("z_steps_per_unit: "); Serial.println(z_steps_per_unit);
+   Serial.print("e_steps_per_unit: "); Serial.println(e_steps_per_unit);
+   Serial.print("max_feedrate: "); Serial.println(max_feedrate);
+}
