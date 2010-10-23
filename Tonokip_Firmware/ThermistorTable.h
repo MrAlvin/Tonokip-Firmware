@@ -21,7 +21,7 @@
  * Thermistor Table
  **********************************************************************
   For thermistor:  www.Rapidonline.com - NTC part no. 104GT-1  - Order code: 61-0452
-  More about Thermistor lookup table information for RepRap Temperature Sensor Boards (http://make.rrrf.org/ts) 
+  Created using a testbed with AD595 K-type sensor
 */
 
 
