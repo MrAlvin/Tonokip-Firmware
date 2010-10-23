@@ -1,6 +1,14 @@
+MrAlvin's extensions to
 Tonokip RepRap firmware rewrite based off of Hydra-mmm firmware.
 
-TODO:
+Notes about MrAlvin's extensions:
+
+
+
+MrAlvin TODO:
+
+
+Tonokip TODO:
 Inactivity timer failsafe that can be enabled/disabled by using a custom Mcode.
 Max Endstop support (easy).
 Add support for DC Extruders.
