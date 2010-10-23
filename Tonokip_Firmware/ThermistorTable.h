@@ -24,7 +24,7 @@
   More about Thermistor lookup table information for RepRap Temperature Sensor Boards (http://make.rrrf.org/ts) 
 */
 
-/*
+
 #define NUMTEMPS 30
 short temptable[NUMTEMPS][2] = {
    {7,355},
@@ -60,7 +60,7 @@ short temptable[NUMTEMPS][2] = {
 };
 
 
-*/
+
 
 // "The original" RepRap Thermistor table
 //     EPCOS 100K Thermistor (B57540G0104F000) - RS 528-8592
@@ -73,7 +73,7 @@ short temptable[NUMTEMPS][2] = {
 //     beta: 4066
 //     max adc: 1023
 
-
+/*
 #define NUMTEMPS 20
 short temptable[NUMTEMPS][2] = {
    {1, 841},
@@ -97,6 +97,6 @@ short temptable[NUMTEMPS][2] = {
    {955, 34},
    {1008, 3}
 };
-
+*/
 
 #endif
