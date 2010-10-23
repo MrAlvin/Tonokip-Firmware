@@ -1,6 +1,155 @@
 #ifndef PINS_H
 #define PINS_H
 
+// Current version of this software will not compile on ATmega168 - code base is too big
+
+/***********************************************************************************************
+* Arduino Mega pin assignment 
+*
+* MrAlvin - Large Polulu board setup v1.0
+*
+* if a pin assignment is not implemented/used on your mendel, then just set the value to -1
+************************************************************************************************/
+#if MOTHERBOARD == 14
+#ifndef __AVR_ATmega1280__
+#error Oops!  Make sure you have 'Arduino Mega' selected from the 'Tools -> Boards' menu.
+#endif
+
+
+#define X_STEP_PIN         39
+#define X_DIR_PIN          41
+#define X_ENABLE_PIN       37
+#define X_MIN_PIN          -1
+#define X_MAX_PIN          -1
+
+#define Y_STEP_PIN         45
+#define Y_DIR_PIN          47
+#define Y_ENABLE_PIN       43
+#define Y_MIN_PIN          -1
+#define Y_MAX_PIN          -1
+
+#define Z_STEP_PIN         51
+#define Z_DIR_PIN          53
+#define Z_ENABLE_PIN       49
+#define Z_MIN_PIN          -1
+#define Z_MAX_PIN          -1
+
+#define E_STEP_PIN         33
+#define E_DIR_PIN          35
+#define E_ENABLE_PIN       31
+
+#define STEPPER_RESET_PIN  -1
+#define LED_PIN            13
+#define FAN_PIN_0          -1       // Use a PWM pin
+#define FAN_PIN_1          -1       // Use a PWM pin
+#define LIGHT_PIN_0        -1       // Use a PWM pin
+#define LIGHT_PIN_1        -1       // Use a PWM pin
+
+#define PS_ON_PIN          22
+#define KILL_PIN           24
+
+
+ //Extruder dual heater option
+   // extrusion point mounted heater/sensor
+#define THERMISTOR_ON_0     true  // true if Thermistor NTC is used, false if K-Type, PTC or other temp sensor is used
+#define HEATER_0_PIN        2
+#define TEMP_0_PIN          0     // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
+
+   // barrel mounted extra heater/sensor  
+   // - just set pin values to -1 if your hardware does not have a dual heater on one extruder configuration
+#define THERMISTOR_ON_1     true  
+#define HEATER_1_PIN        3
+#define TEMP_1_PIN          1     // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
+
+
+ //Heated Bed dual heater option - currently only management of one (#2) is implemented
+#define THERMISTOR_ON_2     true 
+#define HEATER_2_PIN        5
+#define TEMP_2_PIN          2     // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
+
+#define THERMISTOR_ON_3     true
+#define HEATER_3_PIN        6
+#define TEMP_3_PIN          3     // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
+
+ // Microstep control pins - function not yet implemented
+#define MS1_PIN            23
+#define MS2_PIN            25
+#define MS3_PIN            27
+
+
+
+/***********************************************************************************************
+* Arduino Mega pin assignment 
+*
+* Rapatan v1.3 electronics setup
+*
+* if a pin assignment is not implemented/used on your mendel, then just set the value to -1
+************************************************************************************************/
+#elif MOTHERBOARD == 15
+#ifndef __AVR_ATmega1280__
+#error Oops!  Make sure you have 'Arduino Mega' selected from the 'Tools -> Boards' menu.
+#endif
+
+
+#define X_STEP_PIN         4
+#define X_DIR_PIN          3
+#define X_ENABLE_PIN       10
+#define X_MIN_PIN          31
+#define X_MAX_PIN          -1
+
+#define Y_STEP_PIN         16
+#define Y_DIR_PIN          17
+#define Y_ENABLE_PIN       2
+#define Y_MIN_PIN          33
+#define Y_MAX_PIN          -1
+
+#define Z_STEP_PIN         22
+#define Z_DIR_PIN          23
+#define Z_ENABLE_PIN       18
+#define Z_MIN_PIN          35
+#define Z_MAX_PIN          -1
+
+#define E_STEP_PIN         27
+#define E_DIR_PIN          29
+#define E_ENABLE_PIN       25
+
+#define STEPPER_RESET_PIN  -1
+#define LED_PIN            13
+#define FAN_PIN_0          -1       // Use a PWM pin
+#define FAN_PIN_1          -1       // Use a PWM pin
+#define LIGHT_PIN_0        -1       // Use a PWM pin
+#define LIGHT_PIN_1        -1       // Use a PWM pin
+
+#define PS_ON_PIN          -1
+#define KILL_PIN           -1
+
+
+ //Extruder dual heaters
+#define THERMISTOR_ON_0          true
+#define HEATER_0_PIN             11
+#define TEMP_0_PIN                0    // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
+
+#define THERMISTOR_ON_1          true
+#define HEATER_1_PIN             -1
+#define TEMP_1_PIN               -1    // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
+
+
+ //Heated Bed dual heaters
+#define THERMISTOR_ON_2          true 
+#define HEATER_2_PIN             12
+#define TEMP_2_PIN                0    // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
+
+#define THERMISTOR_ON_3          true
+#define HEATER_3_PIN             -1
+#define TEMP_3_PIN               -1    // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
+
+ // Microstep control pins
+#define MS1_PIN            -1
+#define MS2_PIN            -1
+#define MS3_PIN            -1
+
+
+
 /****************************************************************************************
 * Arduino pin assignment
 *
@@ -22,10 +171,11 @@
 *       (D 8) PB0 14|    |15  PB1 (D 9)  PWM
 *                   +----+
 ****************************************************************************************/
-#if MOTHERBOARD == 0
+#elif MOTHERBOARD == 0
 #ifndef __AVR_ATmega168__
 #error Oops!  Make sure you have 'Arduino Diecimila' selected from the boards menu.
 #endif
+
 
 #define X_STEP_PIN          2
 #define X_DIR_PIN           3
@@ -54,8 +204,29 @@
 #define PS_ON_PIN          15
 #define KILL_PIN           -1
 
-#define HEATER_0_PIN        6
+ //Extruder dual heater option  - currently only management of one (#0) is implemented
+#define THERMISTOR_ON_0     true
+#define HEATER_0_PIN        2
 #define TEMP_0_PIN          0    // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
+
+#define THERMISTOR_ON_1     true
+#define HEATER_1_PIN       -1
+#define TEMP_1_PIN         -1    // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
+
+
+ //Heated Bed dual heater option - currently only management of one (#2) is implemented
+#define THERMISTOR_ON_2     true 
+#define HEATER_2_PIN       -1
+#define TEMP_2_PIN         -1    // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
+
+#define THERMISTOR_ON_3     true
+#define HEATER_3_PIN       -1
+#define TEMP_3_PIN         -1    // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
+
+ // Microstep control pins - function not yet implemented
+#define MS1_PIN            -1
+#define MS2_PIN            -1
+#define MS3_PIN            -1
 
 
 
@@ -95,6 +266,8 @@
 #ifndef __AVR_ATmega644P__
 #error Oops!  Make sure you have 'Sanguino' selected from the 'Tools -> Boards' menu.
 #endif
+
+
 
 #define X_STEP_PIN         15
 #define X_DIR_PIN          18
@@ -142,6 +315,7 @@
 #error Oops!  Make sure you have 'Sanguino' selected from the 'Tools -> Boards' menu.
 #endif
 
+
 #define X_STEP_PIN      15
 #define X_DIR_PIN       18
 #define X_ENABLE_PIN    19
@@ -177,12 +351,16 @@
 //pin for controlling the PSU.
 #define PS_ON_PIN       14
 
-#define FAN_PIN         -1
-#define KILL_PIN        -1
+#define KILL_PIN           -1
+#define STEPPER_RESET_PIN  -1
+
+#define FAN_PIN_0          -1       // Use a PWM pin
+#define FAN_PIN_1          -1       // Use a PWM pin
+#define LIGHT_PIN_0        -1       // Use a PWM pin
+#define LIGHT_PIN_1        -1       // Use a PWM pin
 
 #define HEATER_0_PIN    -1
 #define TEMP_0_PIN      -1    // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
-
 
 
 
@@ -196,6 +374,7 @@
 #ifndef __AVR_ATmega1280__
 #error Oops!  Make sure you have 'Arduino Mega' selected from the 'Tools -> Boards' menu.
 #endif
+
 
 #define X_STEP_PIN         22
 #define X_DIR_PIN          23
@@ -232,6 +411,7 @@
 
 
 
+
 /****************************************************************************************
 * Duemilanove w/ ATMega328P pin assignment
 *
@@ -241,39 +421,63 @@
 #error Oops!  Make sure you have 'Arduino Duemilanove w/ ATMega328' selected from the 'Tools -> Boards' menu.
 #endif
 
-#define X_STEP_PIN         19
-#define X_DIR_PIN          18
-#define X_ENABLE_PIN       -1
-#define X_MIN_PIN          17
+
+#define X_STEP_PIN          2
+#define X_DIR_PIN           3
+#define X_ENABLE_PIN        4
+#define X_MIN_PIN          -1
 #define X_MAX_PIN          -1
 
-#define Y_STEP_PIN         10
-#define Y_DIR_PIN           7
-#define Y_ENABLE_PIN       -1
-#define Y_MIN_PIN           8
+#define Y_STEP_PIN          5
+#define Y_DIR_PIN           6
+#define Y_ENABLE_PIN        7
+#define Y_MIN_PIN          -1
 #define Y_MAX_PIN          -1
 
-#define Z_STEP_PIN         13
-#define Z_DIR_PIN           3
-#define Z_ENABLE_PIN        2
-#define Z_MIN_PIN           4
+#define Z_STEP_PIN         -1
+#define Z_DIR_PIN          -1
+#define Z_ENABLE_PIN       -1
+#define Z_MIN_PIN          -1
 #define Z_MAX_PIN          -1
 
-#define E_STEP_PIN         11
-#define E_DIR_PIN          12
+#define E_STEP_PIN         -1
+#define E_DIR_PIN          -1
 #define E_ENABLE_PIN       -1
 
-#define LED_PIN            -1
-#define FAN_PIN             5
-#define PS_ON_PIN          -1
-#define KILL_PIN           -1
+#define STEPPER_RESET_PIN  -1
+#define LED_PIN            13
+#define FAN_PIN_0          -1       // Use a PWM pin
+#define FAN_PIN_1          -1       // Use a PWM pin
+#define LIGHT_PIN_0        -1       // Use a PWM pin
+#define LIGHT_PIN_1        -1       // Use a PWM pin
 
-#define HEATER_0_PIN        6
+#define PS_ON_PIN          11
+#define KILL_PIN           12
+
+
+ //Extruder dual heater option  - currently only management of one (#0) is implemented
+#define THERMISTOR_ON_0     true
+#define HEATER_0_PIN        2
 #define TEMP_0_PIN          0    // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
 
+#define THERMISTOR_ON_1     true
+#define HEATER_1_PIN        -1
+#define TEMP_1_PIN          -1    // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
 
 
+ //Heated Bed dual heater option - currently only management of one (#2) is implemented
+#define THERMISTOR_ON_2     true 
+#define HEATER_2_PIN        5
+#define TEMP_2_PIN          2    // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
 
+#define THERMISTOR_ON_3     true
+#define HEATER_3_PIN        -1
+#define TEMP_3_PIN          -1    // MUST USE ANALOG INPUT NUMBERING NOT DIGITAL OUTPUT NUMBERING!!!!!!!!!
+
+ // Microstep control pins - function not yet implemented
+#define MS1_PIN            -1
+#define MS2_PIN            -1
+#define MS3_PIN            -1
 
 
 #else
